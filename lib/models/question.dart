@@ -4,6 +4,8 @@ enum QuestionCategory {
   laravel,
   database,
   gitWorkflow,
+  systemDesign,
+  securityOwasp,
 }
 
 extension QuestionCategoryExtension on QuestionCategory {
@@ -19,6 +21,10 @@ extension QuestionCategoryExtension on QuestionCategory {
         return 'Database & SQL';
       case QuestionCategory.gitWorkflow:
         return 'Git & Team Workflow';
+      case QuestionCategory.systemDesign:
+        return 'System Design & Scale';
+      case QuestionCategory.securityOwasp:
+        return 'Web & API Security';
     }
   }
 
@@ -34,6 +40,10 @@ extension QuestionCategoryExtension on QuestionCategory {
         return 'storage';
       case QuestionCategory.gitWorkflow:
         return 'alt_route';
+      case QuestionCategory.systemDesign:
+        return 'hub';
+      case QuestionCategory.securityOwasp:
+        return 'security';
     }
   }
 }

@@ -6,6 +6,7 @@ import '../data/question_bank.dart';
 import '../data/task_bank.dart';
 import 'quiz_screen.dart';
 import 'coding_lab_screen.dart';
+import 'mock_interview_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final ProgressService progressService;
@@ -64,6 +65,11 @@ class HomeScreen extends StatelessWidget {
                 // ─── READINESS INDEX CARD ────────────────────────────────
                 _buildReadinessCard(context, readiness),
 
+                const SizedBox(height: 16),
+
+                // ─── MOCK INTERVIEW MODE BANNER ──────────────────────────
+                _buildMockInterviewCard(context),
+
                 const SizedBox(height: 24),
 
                 // ─── KATEGORI PERTANYAAN WAWANCARA ───────────────────────
@@ -82,7 +88,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${questionBank.length} Soal',
+                      '${questionBank.length} Soal (${QuestionCategory.values.length} Kategori)',
                       style: const TextStyle(fontSize: 12, color: AppTheme.accent),
                     ),
                   ],
@@ -233,6 +239,125 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildMockInterviewCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.accent.withValues(alpha: 0.18),
+            AppTheme.surfaceElevated,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: AppTheme.accent.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.accent,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'FITUR BARU',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.success.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppTheme.success.withValues(alpha: 0.4)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.volume_up, size: 12, color: AppTheme.success),
+                    SizedBox(width: 4),
+                    Text(
+                      'TTS Audio Voice',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Simulasi Ujian Wawancara (Mock Exam)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Uji kesiapan mentalmu: 10 pertanyaan acak, batas waktu 60 detik per soal, audio pembacaan soal otomatis, dan evaluasi kelulusan.',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.accent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 2,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => MockInterviewScreen(
+                      progressService: progressService,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.timer_outlined, size: 18),
+              label: const Text(
+                'Mulai Simulasi Wawancara ⏱️',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCategoryGrid(BuildContext context) {
     return Column(
       children: QuestionCategory.values.map((cat) {
@@ -351,13 +476,13 @@ class HomeScreen extends StatelessWidget {
               );
             },
             child: Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isDone
-                      ? AppTheme.success.withValues(alpha: 0.5)
+                      ? AppTheme.success.withValues(alpha: 0.4)
                       : AppTheme.cardBorder,
                 ),
               ),
@@ -374,7 +499,7 @@ class HomeScreen extends StatelessWidget {
                     child: Icon(
                       isDone ? Icons.check_circle : Icons.code,
                       color: isDone ? AppTheme.success : AppTheme.info,
-                      size: 22,
+                      size: 20,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -382,51 +507,49 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          task.title,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         Row(
                           children: [
-                            Flexible(
-                              child: Text(
-                                task.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _getDifficultyColor(task.difficulty)
-                                    .withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
+                                color: _getDifficultyColor(task.difficulty).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 task.difficulty,
                                 style: TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                   color: _getDifficultyColor(task.difficulty),
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isDone ? 'Tuntas' : 'Belum Selesai',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDone ? AppTheme.success : AppTheme.textMuted,
+                              ),
+                            ),
                           ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          isDone ? 'Sudah Diselesaikan ✓' : 'Pseudocode + Live Script',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDone ? AppTheme.success : AppTheme.textSecondary,
-                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right, color: AppTheme.textMuted),
+                  const Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: AppTheme.textMuted,
+                  ),
                 ],
               ),
             ),
@@ -448,6 +571,10 @@ class HomeScreen extends StatelessWidget {
         return Icons.dns;
       case QuestionCategory.gitWorkflow:
         return Icons.fork_right;
+      case QuestionCategory.systemDesign:
+        return Icons.hub;
+      case QuestionCategory.securityOwasp:
+        return Icons.security;
     }
   }
 

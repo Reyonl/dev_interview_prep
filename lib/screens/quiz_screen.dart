@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/question.dart';
 import '../data/question_bank.dart';
 import '../services/progress_service.dart';
+import '../services/tts_service.dart';
 import '../theme/app_theme.dart';
 
 class QuizScreen extends StatefulWidget {
@@ -19,6 +20,8 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
+  final TtsService _ttsService = TtsService();
+
   late List<Question> _questions;
   int _currentIndex = 0;
   int? _selectedOption;
@@ -32,6 +35,12 @@ class _QuizScreenState extends State<QuizScreen> {
         .toList();
 
     _loadExistingAnswer();
+  }
+
+  @override
+  void dispose() {
+    _ttsService.stop();
+    super.dispose();
   }
 
   void _loadExistingAnswer() {
@@ -61,6 +70,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _goToNext() {
+    _ttsService.stop();
     if (_currentIndex < _questions.length - 1) {
       setState(() {
         _currentIndex++;
@@ -72,12 +82,20 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void _goToPrev() {
+    _ttsService.stop();
     if (_currentIndex > 0) {
       setState(() {
         _currentIndex--;
         _loadExistingAnswer();
       });
     }
+  }
+
+  void _speakQuestion(Question q) {
+    _ttsService.speak(
+      text: '${widget.category.title}. Pertanyaan: ${q.question}',
+      speechId: 'quiz_${q.id}',
+    );
   }
 
   @override
@@ -97,6 +115,22 @@ class _QuizScreenState extends State<QuizScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.category.title),
+        actions: [
+          ListenableBuilder(
+            listenable: _ttsService,
+            builder: (context, _) {
+              final isSpeaking = _ttsService.currentSpeakingId == 'quiz_${q.id}' && _ttsService.isPlaying;
+              return IconButton(
+                tooltip: isSpeaking ? 'Hentikan Suara' : 'Dengarkan Pertanyaan',
+                icon: Icon(
+                  isSpeaking ? Icons.volume_off : Icons.volume_up,
+                  color: isSpeaking ? AppTheme.accent : AppTheme.textSecondary,
+                ),
+                onPressed: () => _speakQuestion(q),
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(4),
           child: LinearProgressIndicator(
@@ -141,7 +175,7 @@ class _QuizScreenState extends State<QuizScreen> {
                     child: Text(
                       isCorrect ? 'BENAR ✓' : 'KURANG TEPAT ✗',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
                         color: isCorrect ? AppTheme.success : AppTheme.error,
                       ),
@@ -149,12 +183,13 @@ class _QuizScreenState extends State<QuizScreen> {
                   ),
               ],
             ),
+
             const SizedBox(height: 12),
 
-            // Card Pertanyaan
+            // Question Card
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppTheme.surface,
                 borderRadius: BorderRadius.circular(16),
@@ -163,33 +198,57 @@ class _QuizScreenState extends State<QuizScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    q.question,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      height: 1.4,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceElevated,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.help_outline,
+                          size: 18,
+                          color: AppTheme.accent,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          q.question,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: AppTheme.surfaceElevated,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.psychology, size: 16, color: AppTheme.info),
+                        const Icon(
+                          Icons.psychology,
+                          size: 16,
+                          color: AppTheme.info,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Tujuan Pertanyaan: ${q.whyAsked}',
+                            'Alasan Ditanyakan: ${q.whyAsked}',
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
-                              height: 1.3,
+                              fontStyle: FontStyle.italic,
                             ),
                           ),
                         ),
@@ -200,206 +259,52 @@ class _QuizScreenState extends State<QuizScreen> {
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+
+            // Section Label
             const Text(
-              'Pilih Pendekatan Jawabanmu:',
+              'Pilihan Jawaban:',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.bold,
                 color: AppTheme.textSecondary,
+                letterSpacing: 0.5,
               ),
             ),
+
             const SizedBox(height: 10),
 
-            // Pilihan Jawaban
+            // Options List
             ...List.generate(q.options.length, (index) {
-              final optionText = q.options[index];
-              final isChosen = _selectedOption == index;
-              final isTargetCorrect = q.correctOptionIndex == index;
-
-              Color borderColor = AppTheme.cardBorder;
-              Color bgColor = AppTheme.surface;
-              Widget icon = Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.cardBorder, width: 2),
-                ),
-                child: Center(
-                  child: Text(
-                    String.fromCharCode(65 + index),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textMuted,
-                    ),
-                  ),
-                ),
-              );
-
-              if (_hasSubmitted) {
-                if (isTargetCorrect) {
-                  borderColor = AppTheme.success;
-                  bgColor = AppTheme.success.withValues(alpha: 0.08);
-                  icon = const Icon(Icons.check_circle, color: AppTheme.success, size: 24);
-                } else if (isChosen && !isTargetCorrect) {
-                  borderColor = AppTheme.error;
-                  bgColor = AppTheme.error.withValues(alpha: 0.08);
-                  icon = const Icon(Icons.cancel, color: AppTheme.error, size: 24);
-                }
-              } else if (isChosen) {
-                borderColor = AppTheme.accent;
-                bgColor = AppTheme.accent.withValues(alpha: 0.08);
-              }
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(14),
-                  onTap: _hasSubmitted ? null : () => _handleSelectOption(index),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: bgColor,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: borderColor, width: isChosen || (_hasSubmitted && isTargetCorrect) ? 1.5 : 1),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        icon,
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            optionText,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: (_hasSubmitted && isChosen && !isTargetCorrect)
-                                  ? AppTheme.error
-                                  : AppTheme.textPrimary,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              return _buildOptionTile(
+                index: index,
+                text: q.options[index],
+                correctIndex: q.correctOptionIndex,
               );
             }),
 
-            // ─── PANEL KOREKSI & PENJELASAN SAAT SUDAH DIJAWAB ────────────
+            const SizedBox(height: 16),
+
+            // Instant Correction / Explanation Box
             if (_hasSubmitted) ...[
-              const SizedBox(height: 14),
-
-              // Penjelasan Opsi yang dipilih jika salah
-              if (!isCorrect && _selectedOption != null && q.optionExplanations.containsKey(_selectedOption)) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.error.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded, color: AppTheme.error, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            'Koreksi Jawabanmu:',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.error,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        q.optionExplanations[_selectedOption]!,
-                        style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary, height: 1.35),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              // Jawaban Ideal di Hadapan Pewawancara
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceElevated,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.success.withValues(alpha: 0.35)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.mic, color: AppTheme.success, size: 18),
-                        SizedBox(width: 6),
-                        Text(
-                          'Cara Menjawab Ideal di Hadapan Interviewer:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.success,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      q.idealAnswer,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppTheme.textPrimary,
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Divider(color: AppTheme.cardBorder),
-                    const SizedBox(height: 8),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.tips_and_updates, color: AppTheme.accent, size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Tips Senior: ${q.seniorTip}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppTheme.accent,
-                              fontStyle: FontStyle.italic,
-                              height: 1.35,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
+              _buildCorrectionSection(q, isCorrect),
               const SizedBox(height: 20),
             ],
 
-            // ─── NAVIGASI SOAL ────────────────────────────────────────────
+            // Navigation Buttons
             Row(
               children: [
                 if (_currentIndex > 0)
                   Expanded(
                     child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.textSecondary,
+                        side: const BorderSide(color: AppTheme.cardBorder),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                       icon: const Icon(Icons.arrow_back, size: 16),
                       label: const Text('Sebelumnya'),
                       onPressed: _goToPrev,
@@ -408,26 +313,296 @@ class _QuizScreenState extends State<QuizScreen> {
                 if (_currentIndex > 0) const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                     icon: Icon(
-                      _currentIndex == _questions.length - 1
-                          ? Icons.check
-                          : Icons.arrow_forward,
+                      _currentIndex < _questions.length - 1
+                          ? Icons.arrow_forward
+                          : Icons.check,
                       size: 16,
                     ),
                     label: Text(
-                      _currentIndex == _questions.length - 1
-                          ? 'Selesai'
-                          : 'Selanjutnya',
+                      _currentIndex < _questions.length - 1
+                          ? 'Selanjutnya'
+                          : 'Selesai Kategori',
                     ),
                     onPressed: _hasSubmitted ? _goToNext : null,
                   ),
                 ),
               ],
             ),
+
             const SizedBox(height: 24),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOptionTile({
+    required int index,
+    required String text,
+    required int correctIndex,
+  }) {
+    final isSelected = _selectedOption == index;
+    final isCorrectOption = index == correctIndex;
+
+    Color borderColor = AppTheme.cardBorder;
+    Color bgColor = AppTheme.surface;
+    Widget? indicator;
+
+    if (_hasSubmitted) {
+      if (isCorrectOption) {
+        borderColor = AppTheme.success;
+        bgColor = AppTheme.success.withValues(alpha: 0.1);
+        indicator = const Icon(Icons.check_circle, color: AppTheme.success, size: 20);
+      } else if (isSelected) {
+        borderColor = AppTheme.error;
+        bgColor = AppTheme.error.withValues(alpha: 0.1);
+        indicator = const Icon(Icons.cancel, color: AppTheme.error, size: 20);
+      }
+    } else if (isSelected) {
+      borderColor = AppTheme.accent;
+      bgColor = AppTheme.accent.withValues(alpha: 0.1);
+    }
+
+    final optionLetters = ['A', 'B', 'C', 'D'];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _hasSubmitted ? null : () => _handleSelectOption(index),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor, width: 1.5),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected ? AppTheme.accent : AppTheme.surfaceElevated,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: borderColor),
+                ),
+                child: Text(
+                  optionLetters[index],
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  text,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              if (indicator != null) ...[
+                const SizedBox(width: 8),
+                indicator,
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCorrectionSection(Question q, bool isCorrect) {
+    final selectedExp = _selectedOption != null
+        ? q.optionExplanations[_selectedOption]
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Penjelasan Opsi yang Dipilih
+        if (selectedExp != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isCorrect
+                  ? AppTheme.success.withValues(alpha: 0.1)
+                  : AppTheme.error.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isCorrect
+                    ? AppTheme.success.withValues(alpha: 0.4)
+                    : AppTheme.error.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isCorrect ? Icons.check_circle_outline : Icons.highlight_off,
+                      color: isCorrect ? AppTheme.success : AppTheme.error,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isCorrect ? 'Jawaban Benar!' : 'Kenapa Pilihan Ini Keliru?',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isCorrect ? AppTheme.success : AppTheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  selectedExp,
+                  style: const TextStyle(fontSize: 12, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+
+        const SizedBox(height: 12),
+
+        // Naskah Jawaban Ideal yang Disukai Interviewer
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.mic, color: AppTheme.accent, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Naskah Jawaban Ideal Interviewer',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.volume_up, size: 18, color: AppTheme.accent),
+                    tooltip: 'Dengarkan Naskah Jawaban',
+                    onPressed: () {
+                      _ttsService.speak(
+                        text: 'Naskah jawaban ideal: ${q.idealAnswer}',
+                        speechId: 'ideal_${q.id}',
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                q.idealAnswer,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.5,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Senior Tip
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceElevated,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.cardBorder),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.tips_and_updates,
+                      size: 16,
+                      color: AppTheme.warning,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.3),
+                          children: [
+                            const TextSpan(
+                              text: 'Tips Senior Dev: ',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.warning,
+                              ),
+                            ),
+                            TextSpan(text: q.seniorTip),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Keywords Chips
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: q.keyKeywords.map((kw) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppTheme.cardBorder),
+                    ),
+                    child: Text(
+                      '#$kw',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.accent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
