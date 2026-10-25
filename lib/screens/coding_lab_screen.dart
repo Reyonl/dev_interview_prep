@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../models/coding_task.dart';
 import '../services/progress_service.dart';
 import '../theme/app_theme.dart';
+import '../services/tts_service.dart';
 
 class CodingLabScreen extends StatefulWidget {
   final CodingTask task;
@@ -24,6 +25,7 @@ class _CodingLabScreenState extends State<CodingLabScreen>
   late TextEditingController _codeController;
   TaskEvaluationResult? _evalResult;
   bool _showSeniorSolution = false;
+  final TtsService _ttsService = TtsService();
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _CodingLabScreenState extends State<CodingLabScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _ttsService.stop();
     _codeController.dispose();
     super.dispose();
   }
@@ -272,18 +275,37 @@ class _CodingLabScreenState extends State<CodingLabScreen>
                   ),
                 ),
                 const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.copy, size: 14),
-                    label: const Text('Salin Naskah', style: TextStyle(fontSize: 11)),
-                    onPressed: () {
-                      Clipboard.setData(ClipboardData(text: widget.task.interviewerSpeechScript));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Naskah ucapan disalin ke clipboard!')),
-                      );
-                    },
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ListenableBuilder(
+                      listenable: _ttsService,
+                      builder: (context, _) {
+                        final isSpeaking = _ttsService.currentSpeakingId == 'task_speech_${widget.task.id}' && _ttsService.isPlaying;
+                        return TextButton.icon(
+                          icon: Icon(isSpeaking ? Icons.volume_off : Icons.volume_up, size: 14),
+                          label: Text(isSpeaking ? 'Hentikan' : 'Dengarkan Naskah', style: const TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            _ttsService.speak(
+                              text: widget.task.interviewerSpeechScript,
+                              speechId: 'task_speech_${widget.task.id}',
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.copy, size: 14),
+                      label: const Text('Salin Naskah', style: TextStyle(fontSize: 11)),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: widget.task.interviewerSpeechScript));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Naskah ucapan disalin ke clipboard!')),
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),

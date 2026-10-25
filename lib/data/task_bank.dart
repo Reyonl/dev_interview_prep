@@ -52,101 +52,118 @@ function hitungTotalKasir(array \$items): float {
 }
 ''',
     interviewerSpeechScript:
-      '"Baik Pak/Bu, sebelum saya menulis kodenya, saya jelaskan alurnya terlebih dahulu:\n'
-      '1. Pertama, saya inisialisasi penampung total senilai 0.\n'
-      '2. Kedua, saya gunakan perulangan foreach untuk mengalikan harga dengan kuantitas tiap item.\n'
-      '3. Ketiga, saya buat validasi kondisi if untuk memeriksa apakah totalnya tembus ambang batas 100 ribu untuk mendapatkan diskon 10%.\n'
-      '4. Terakhir, saya kembalikan total akhirnya. Saya mulai ketik implementasinya sekarang ya, Pak/Bu."',
+      '"Pertama saya inisialisasi variabel accumulator `\$total = 0.0`. '
+      'Kemudian saya lakukan looping foreach pada `\$items` dan menghitung subtotal perkalian harga dan kuantitas. '
+      'Saya tambahkan pengaman defensif menggunakan `?? 0` agar kode tidak memicu PHP Warning jika ada key array yang hilang. '
+      'Terakhir, saya evaluasi apakah total melebihi seratus ribu; jika ya, kurangkan diskon 10% lalu kembalikan totalnya."',
     defensiveEdgeCases: [
-      'Bagaimana jika array \$items kosong? (Fungsi harus tetap aman mengembalikan 0)',
-      'Bagaimana jika harga atau jumlah bernilai negatif atau string? (Gunakan casting dan fungsi `max(0, ...)`))',
-      'Bagaimana jika key array tidak ada? (Gunakan null coalescing `?? 0`)',
+      'Data array kosong `[]`: langsung mengembalikan 0 tanpa error fatal.',
+      'Key array hilang (undefined index) dicegah dengan null coalescing `??`.',
+      'Kuantitas atau harga bernilai negatif dinormalisasi ke 0.',
     ],
     requiredSyntaxPatterns: [
       'function',
       'foreach',
-      '100000',
-      '0.1',
+      'if',
       'return',
     ],
     explanation:
-      'Tugas ini menguji apakah kamu memahami struktur dasar perulangan array, kalkulasi aritmatika, dan penulisan kondisi logika `if`. '
-      'Menambahkan validasi angka nol/negatif akan langsung membuatmu dinilai sebagai developer yang matang.',
+      'Tugas ini menguji kebiasaan berpikir terstruktur: penanganan tipe data, loop, kondisional, dan defensive null handling.',
   ),
 
-  // ─── TUGAS 2: FILTER STOK HABIS & SORTING ────────────────────────────────
+  // ─── TUGAS 2: TRANSAKSI SALDO ATOMIK (ACID DI LARAVEL) ───────────────────
   CodingTask(
     id: 'task_2',
-    title: 'Filter Produk Stok Habis (Out of Stock)',
+    title: 'Transfer Saldo Antar User (Database ACID)',
     difficulty: 'Menengah',
     scenario:
-      'Pewawancara: "Diberikan kumpulan data produk di toko Warung Lupi.\n'
-      'Buat fungsi `filterProdukHabis(\$daftarProduk)` yang hanya mengembalikan produk dengan stok sama dengan 0.\n'
-      'Pastikan fungsi mengembalikan array baru tanpa merusak data asli."',
+      'Pewawancara: "Buat method di Laravel Service untuk transfer saldo dari User A ke User B sebesar nominal tertentu.\n'
+      'Pastikan saldo pengirim cukup, kedua saldo ter-update, dan jika terjadi error di tengah jalan, uang tidak boleh hilang."',
     expectedPseudocode: [
-      'LANGKAH 1: Siapkan array kosong \$produkHabis = []',
-      'LANGKAH 2: Loop setiap produk dari \$daftarProduk',
-      'LANGKAH 3: Cek kondisi if (\$produk[\'stok\'] === 0)',
-      'LANGKAH 4: Masukkan produk tersebut ke dalam array \$produkHabis',
-      'LANGKAH 5: Return array \$produkHabis',
+      'LANGKAH 1: Validasi awal: nominal harus > 0',
+      'LANGKAH 2: Buka transaksi database dengan DB::transaction()',
+      'LANGKAH 3: Lock baris pengirim dengan lockForUpdate() dan cek kecukupan saldo',
+      'LANGKAH 4: Kurangi saldo pengirim dan tambahkan saldo penerima',
+      'LANGKAH 5: Buat riwayat mutasi transaksi',
+      'LANGKAH 6: Otomatis commit jika sukses, atau lempar Exception agar rollback jika saldo kurang',
     ],
     boilerplateCode:
 '''<?php
 
-function filterProdukHabis(array \$daftarProduk): array {
-    // Tulis pseudocode dan logika kodinganmu di sini...
+namespace App\\Services;
 
+use Illuminate\\Support\\Facades\\DB;
+use App\\Models\\User;
+use Exception;
+
+class TransferService {
+    public function transfer(int \$fromId, int \$toId, float \$amount): bool {
+        // Tulis logika transaksi aman di sini...
+
+    }
 }
 ''',
     solutionCode:
 '''<?php
 
-function filterProdukHabis(array \$daftarProduk): array {
-    // Cara 1: Menggunakan array_filter (fungsional & bersih)
-    return array_values(array_filter(\$daftarProduk, function (\$produk) {
-        return isset(\$produk['stok']) && (int) \$produk['stok'] === 0;
-    }));
+namespace App\\Services;
 
-    /* Atau Cara 2: Menggunakan foreach konvensional
-    \$hasil = [];
-    foreach (\$daftarProduk as \$p) {
-        if (isset(\$p['stok']) && (int) \$p['stok'] === 0) {
-            \$hasil[] = \$p;
+use Illuminate\\Support\\Facades\\DB;
+use App\\Models\\User;
+use Exception;
+
+class TransferService {
+    public function transfer(int \$fromId, int \$toId, float \$amount): bool {
+        if (\$amount <= 0) {
+            throw new Exception("Nominal transfer harus lebih dari 0.");
         }
+
+        return DB::transaction(function () use (\$fromId, \$toId, \$amount) {
+            // Pessimistic Locking untuk mencegah race condition
+            \$sender = User::where('id', \$fromId)->lockForUpdate()->firstOrFail();
+            \$receiver = User::where('id', \$toId)->lockForUpdate()->firstOrFail();
+
+            if (\$sender->saldo < \$amount) {
+                throw new Exception("Saldo pengirim tidak mencukupi.");
+            }
+
+            \$sender->decrement('saldo', \$amount);
+            \$receiver->increment('saldo', \$amount);
+
+            return true;
+        });
     }
-    return \$hasil;
-    */
 }
 ''',
     interviewerSpeechScript:
-      '"Untuk memfilter array ini, ada dua pendekatan Pak/Bu: bisa menggunakan looping konvensional atau memanfaatkan fungsi bawaan `array_filter`. '
-      'Saya akan menggunakan `array_filter` dengan pengecekan strict tipe data `=== 0` dan membungkusnya dengan `array_values` agar index array-nya rapi kembali dari 0."',
+      '"Untuk transfer uang, integritas data adalah nomor satu. '
+      'Saya membungkus seluruh alur dalam `DB::transaction()` closure. '
+      'Selain itu, saya menggunakan Pessimistic Locking via `lockForUpdate()` agar tidak terjadi double-spending jika user menekan tombol transfer dua kali dengan cepat. '
+      'Jika saldo kurang, saya melempar Exception sehingga transaksi otomatis di-rollback oleh Laravel."',
     defensiveEdgeCases: [
-      'Gunakan `=== 0` dengan casting `(int)` agar string "0" atau angka 0 tidak rancu dengan `null` atau `false`.',
-      'Panggil `array_values()` jika memakai `array_filter` agar index array numerik tidak berlubang saat di-serialize ke JSON response.',
+      'Nominal negatif atau 0 dicegah di awal fungsi.',
+      'Race condition dicegah dengan `lockForUpdate()`.',
+      'Rollback otomatis terjadi jika query increment penerima gagal.',
     ],
     requiredSyntaxPatterns: [
-      'function',
-      'stok',
-      '=== 0',
-      'return',
+      'DB::transaction',
+      'decrement',
+      'increment',
+      'throw',
     ],
     explanation:
-      'Menguji pemahaman manipulasi array di PHP dan perbedaan antara modifikasi data in-place vs menghasilkan data baru (immutable approach).',
+      'Menunjukkan kamu bukan sekadar membuat fitur berjalan, tetapi memahami keamanan transaksi keuangan di level basis data.',
   ),
 
-  // ─── TUGAS 3: REFACTOR BUG N+1 QUERY DI CONTROLLER ──────────────────────
+  // ─── TUGAS 3: REFACTOR N+1 QUERY DI LARAVEL CONTROLLER ───────────────────
   CodingTask(
     id: 'task_3',
-    title: 'Refactor Bug N+1 Query di Laravel',
+    title: 'Optimasi N+1 Query pada Daftar Transaksi',
     difficulty: 'Menengah',
     scenario:
-      'Pewawancara: "Perhatikan kode Laravel Controller berikut:\n\n'
-      'public function index() {\n'
-      '    \$orders = Order::all();\n'
-      '    return view(\'orders.index\', compact(\'orders\'));\n'
-      '}\n\n'
-      'Di file blade-nya ada perulangan yang menampilkan: `\$order->customer->nama` dan `\$order->items->count()`.\n'
+      'Pewawancara: "Lihat kode controller ini:\n'
+      '  \$orders = Order::all();\n'
+      '  // Di blade: \$order->customer->nama dan \$order->items->count()\n'
       'Apa masalah performa di sini dan bagaimana cara memperbaikinya?"',
     expectedPseudocode: [
       'LANGKAH 1: Identifikasi masalah N+1 Query: `Order::all()` memicu query tambahan setiap pemanggilan relasi di blade',
@@ -257,5 +274,129 @@ function balikKata(string \$teks): string {
     ],
     explanation:
       'Tes algoritma klasik untuk menguji apakah kamu memahami konsep manipulasi string sebagai array karakter dan kontrol indeks perulangan.',
+  ),
+
+  // ─── TUGAS 5: SANITASI NOMOR WHATSAPP INDONESIA ─────────────────────────
+  CodingTask(
+    id: 'task_5',
+    title: 'Sanitasi & Format Nomor WhatsApp (+62 / 08 / 62)',
+    difficulty: 'Mudah',
+    scenario:
+      'Pewawancara: "User sering menginput nomor WhatsApp dengan format acak-acakan: \'0812-3456-7890\', \'+62 812 3456 7890\', atau \'6281234567890\'.\n'
+      'Buat fungsi `formatNomorWA(\$nomor)` di PHP yang membersihkan karakter non-angka dan mengubahnya menjadi format standar internasional `628...`."',
+    expectedPseudocode: [
+      'LANGKAH 1: Hapus semua karakter selain angka menggunakan preg_replace("/\\D/", "", \$nomor)',
+      'LANGKAH 2: Cek awalan nomor:',
+      '  - Jika berawalan "08", ganti digit "0" di awal menjadi "62"',
+      '  - Jika sudah berawalan "628", biarkan tetap',
+      'LANGKAH 3: Validasi panjang nomor wajar (10 - 15 digit)',
+      'LANGKAH 4: Kembalikan string nomor bersih',
+    ],
+    boilerplateCode:
+'''<?php
+
+function formatNomorWA(string \$nomor): string {
+    // 1. Bersihkan karakter non-angka...
+    // 2. Format awalan menjadi 628...
+
+}
+''',
+    solutionCode:
+'''<?php
+
+function formatNomorWA(string \$nomor): string {
+    // 1. Bersihkan semua spasi, strip, tanda plus, tanda kurung
+    \$clean = preg_replace('/\\D/', '', \$nomor);
+
+    // 2. Jika berawalan 0, ubah menjadi 62 (contoh: 0812 -> 62812)
+    if (str_starts_with(\$clean, '0')) {
+        \$clean = '62' . substr(\$clean, 1);
+    }
+
+    // 3. Kembalikan format nomor yang sudah terstandar
+    return \$clean;
+}
+''',
+    interviewerSpeechScript:
+      '"Untuk integrasi WhatsApp Gateway seperti Fonnte atau Wablas, nomor harus berformat kode negara 62 tanpa tanda plus atau strip. '
+      'Langkah pertama saya menghapus semua karakter non-digit menggunakan regex `preg_replace`. '
+      'Kemudian saya memeriksa apakah string berawalan \'0\'; jika iya, saya ganti digit nol tersebut dengan kode negara \'62\'. '
+      'Dengan begitu, semua variasi input user menjadi seragam dan siap dikirim."',
+    defensiveEdgeCases: [
+      'Input mengandung spasi dan simbol seperti "+62 812-3456-7890" otomatis bersih.',
+      'Nomor yang sudah berawalan 628 tidak diubah dua kali (idempotent).',
+    ],
+    requiredSyntaxPatterns: [
+      'function',
+      'preg_replace',
+      'substr',
+      'return',
+    ],
+    explanation:
+      'Tugas live coding praktis yang sangat sering diujikan di perusahaan e-commerce, POS kasir, atau agensi software lokal Indonesia.',
+  ),
+
+  // ─── TUGAS 6: PENCARI PASANGAN TARGET (TWO SUM) ──────────────────────────
+  CodingTask(
+    id: 'task_6',
+    title: 'Two Sum (Pencari Pasangan Saldo Target) O(N)',
+    difficulty: 'Menengah',
+    scenario:
+      'Pewawancara: "Diberikan array nominal transaksi `\$transaksi` dan sebuah target saldo `\$target`.\n'
+      'Temukan dan kembalikan dua angka dari array tersebut yang jika dijumlahkan menghasilkan nilai `\$target` tepat.\n'
+      'Gunakan pendekatan efisien O(N) dengan bantuan Map/Associative Array, bukan brute force loop bersarang O(N²)."',
+    expectedPseudocode: [
+      'LANGKAH 1: Siapkan associative array kosong \$seen = [] untuk menyimpan angka yang sudah lewat',
+      'LANGKAH 2: Loop setiap elemen \$angka di dalam \$transaksi',
+      'LANGKAH 3: Hitung selisih \$sisa = \$target - \$angka',
+      'LANGKAH 4: Jika \$sisa sudah ada di dalam \$seen (isset(\$seen[\$sisa])), kita menemukan pasangannya! Return [\$sisa, \$angka]',
+      'LANGKAH 5: Simpan \$seen[\$angka] = true lalu lanjutkan loop',
+      'LANGKAH 6: Jika tidak ada pasangan ditemukan, return array kosong []',
+    ],
+    boilerplateCode:
+'''<?php
+
+function cariPasangan(array \$transaksi, int \$target): array {
+    // Tulis algoritma Two Sum O(N) dengan associative array di sini:
+
+}
+''',
+    solutionCode:
+'''<?php
+
+function cariPasangan(array \$transaksi, int \$target): array {
+    \$seen = []; // Hash map lookup O(1)
+
+    foreach (\$transaksi as \$angka) {
+        \$sisa = \$target - \$angka;
+
+        // Cek apakah angka komplementernya sudah pernah kita lewati sebelumnya
+        if (isset(\$seen[\$sisa])) {
+            return [\$sisa, \$angka];
+        }
+
+        // Tandai angka saat ini ke dalam hash map
+        \$seen[\$angka] = true;
+    }
+
+    return []; // Tidak ditemukan pasangan
+}
+''',
+    interviewerSpeechScript:
+      '"Pendekatan brute force menggunakan nested loop for di dalam for memiliki kompleksitas waktu O(N²), yang akan sangat lambat jika transaksi mencapai ribuan. '
+      'Oleh karena itu, saya mengoptimalkannya menjadi O(N) waktu dan O(N) ruang menggunakan Hash Map (associative array di PHP). '
+      'Di setiap iterasi, kita hitung selisihnya (\$target - \$angka). Jika selisih tersebut sudah ada di Map via `isset()`, kita langsung menemukan pasangannya dalam lookup O(1)."',
+    defensiveEdgeCases: [
+      'Array kosong atau kurang dari 2 elemen: langsung return [] tanpa error.',
+      'Target berupa angka negatif atau nol tetap tertangani dengan benar secara matematis.',
+    ],
+    requiredSyntaxPatterns: [
+      'function',
+      'foreach',
+      'isset',
+      'return',
+    ],
+    explanation:
+      'Soal algoritma paling legendaris dalam wawancara kerja software engineer dunia. Menunjukkan bahwa kamu paham efisiensi kompleksitas waktu Big-O.',
   ),
 ];
